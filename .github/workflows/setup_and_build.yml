@@ -1,0 +1,2256 @@
+name: Generate Project & Build Calki APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/setup_and_build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  generate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Unpack Complete Calki Android Project
+        run: |
+          mkdir -p app/src/main/java/com/calki/app/data/local
+          mkdir -p app/src/main/java/com/calki/app/data/preferences
+          mkdir -p app/src/main/java/com/calki/app/data/repository
+          mkdir -p app/src/main/java/com/calki/app/di
+          mkdir -p app/src/main/java/com/calki/app/domain/evaluator
+          mkdir -p app/src/main/java/com/calki/app/domain/model
+          mkdir -p app/src/main/java/com/calki/app/ui/components
+          mkdir -p app/src/main/java/com/calki/app/ui/screens
+          mkdir -p app/src/main/java/com/calki/app/ui/theme
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/test/java/com/calki/app/domain/evaluator
+
+          cat << 'EOF' > .gitignore
+          *.iml
+          .gradle
+          /local.properties
+          /.idea
+          .DS_Store
+          /build
+          /captures
+          .externalNativeBuild
+          .cxx
+          local.properties
+          EOF
+
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Calki"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.20" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.20" apply false
+              id("com.google.dagger.hilt.android") version "2.52" apply false
+              id("com.google.devtools.ksp") version "2.0.20-1.0.25" apply false
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+              id("com.google.dagger.hilt.android")
+              id("com.google.devtools.ksp")
+              id("kotlin-parcelize")
+          }
+
+          android {
+              namespace = "com.calki.app"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "com.calki.app"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0.0"
+                  testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+                  vectorDrawables { useSupportLibrary = true }
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = true
+                      isShrinkResources = true
+                      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions { jvmTarget = "17" }
+              buildFeatures { compose = true }
+              packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+          }
+
+          dependencies {
+              val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
+              implementation(composeBom)
+              androidTestImplementation(composeBom)
+
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.core:core-splashscreen:1.0.1")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+              implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
+              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+              implementation("androidx.activity:activity-compose:1.9.2")
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+
+              implementation("com.google.dagger:hilt-android:2.52")
+              ksp("com.google.dagger:hilt-android-compiler:2.52")
+              implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+
+              val roomVersion = "2.6.1"
+              implementation("androidx.room:room-runtime:$roomVersion")
+              implementation("androidx.room:room-ktx:$roomVersion")
+              ksp("androidx.room:room-compiler:$roomVersion")
+
+              implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+              testImplementation("junit:junit:4.13.2")
+              debugImplementation("androidx.compose.ui:ui-tooling")
+              debugImplementation("androidx.compose.ui:ui-test-manifest")
+          }
+          EOF
+
+          cat << 'EOF' > app/proguard-rules.pro
+          -keep class * extends androidx.room.RoomDatabase
+          -keep @androidx.room.Entity class *
+          -dontwarn androidx.room.paging.**
+          -keepclassmembers class * implements android.os.Parcelable {
+              public static final ** CREATOR;
+          }
+          -dontwarn dagger.hilt.**
+          -keep class dagger.hilt.** { *; }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <application
+                  android:name=".CalkiApp"
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.Calki.Starting">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:windowSoftInputMode="stateAlwaysHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#FFF8F0" android:pathData="M0,0h108v108h-108z" />
+              <path android:fillColor="#FFE8D6" android:pathData="M0,0 C45,0 45,45 0,45 Z" />
+              <path android:fillColor="#FFF1CC" android:pathData="M108,108 C65,108 65,65 108,65 Z" />
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher_foreground.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <group android:name="root" android:pivotX="54" android:pivotY="54">
+                  <path android:strokeColor="#7C5CFF" android:strokeWidth="3.2" android:strokeLineCap="round" android:pathData="M54,29 L54,22" />
+                  <path android:fillColor="#FFD166" android:pathData="M48,15.5 C46.9,15.5 46,16.4 46,17.5 C46,18.6 46.9,19.5 48,19.5 L60,19.5 C61.1,19.5 62,18.6 62,17.5 C62,16.4 61.1,15.5 60,15.5 Z" />
+                  <path android:fillColor="#FFD166" android:pathData="M48,20.5 C46.9,20.5 46,21.4 46,22.5 C46,23.6 46.9,24.5 48,24.5 L60,24.5 C61.1,24.5 62,23.6 62,22.5 C62,21.4 61.1,20.5 60,20.5 Z" />
+                  <path android:fillColor="#FFD166" android:pathData="M74,21 Q74,26 79,26 Q74,26 74,31 Q74,26 69,26 Q74,26 74,21 Z" />
+                  <path android:fillColor="#267C5CFF" android:pathData="M42,31 L66,31 C73.7,31 80,37.3 80,45 L80,71 C80,78.7 73.7,85 66,85 L42,85 C34.3,85 28,78.7 28,71 L28,45 C28,37.3 34.3,31 42,31 Z" />
+                  <path android:fillColor="#7C5CFF" android:pathData="M42,28 L66,28 C73.7,28 80,34.3 80,42 L80,68 C80,75.7 73.7,82 66,82 L42,82 C34.3,82 28,75.7 28,68 L28,42 C28,34.3 34.3,28 42,28 Z" />
+                  <path android:fillColor="#FFF8F0" android:pathData="M41,35 L67,35 C70.9,35 74,38.1 74,42 L74,52 C74,55.9 70.9,59 67,59 L41,59 C37.1,59 34,55.9 34,52 L34,42 C34,38.1 37.1,35 41,35 Z" />
+                  <path android:fillColor="#FF8FA3" android:pathData="M39.5,51.5 a3,2 0 1,0 6,0 a3,2 0 1,0 -6,0" />
+                  <path android:fillColor="#FF8FA3" android:pathData="M62.5,51.5 a3,2 0 1,0 6,0 a3,2 0 1,0 -6,0" />
+                  <path android:strokeColor="#211E33" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M41.5,46.5 L44.5,43 L47.5,46.5" />
+                  <path android:strokeColor="#211E33" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M60.5,46.5 L63.5,43 L66.5,46.5" />
+                  <path android:strokeColor="#211E33" android:strokeWidth="2.4" android:strokeLineCap="round" android:pathData="M50.5,49.5 Q54,53 57.5,49.5" />
+                  <path android:fillColor="#FF8A65" android:pathData="M38,65 L48,65 C50.2,65 52,66.8 52,69 C52,71.2 50.2,73 48,73 L38,73 C35.8,73 34,71.2 34,69 C34,66.8 35.8,65 38,65 Z" />
+                  <path android:fillColor="#FFF8F0" android:pathData="M56,69 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+                  <path android:fillColor="#FFD166" android:pathData="M66,69 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+              </group>
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher_monochrome.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#000000" android:pathData="M48,15.5 C46.9,15.5 46,16.4 46,17.5 C46,18.6 46.9,19.5 48,19.5 L60,19.5 C61.1,19.5 62,18.6 62,17.5 C62,16.4 61.1,15.5 60,15.5 Z" />
+              <path android:fillColor="#000000" android:pathData="M48,20.5 C46.9,20.5 46,21.4 46,22.5 C46,23.6 46.9,24.5 48,24.5 L60,24.5 C61.1,24.5 62,23.6 62,22.5 C62,21.4 61.1,20.5 60,20.5 Z" />
+              <path android:fillColor="#000000" android:pathData="M74,21 Q74,26 79,26 Q74,26 74,31 Q74,26 69,26 Q74,26 74,21 Z" />
+              <path android:strokeColor="#000000" android:strokeWidth="4.5" android:pathData="M42,28 L66,28 C73.7,28 80,34.3 80,42 L80,68 C80,75.7 73.7,82 66,82 L42,82 C34.3,82 28,75.7 28,68 L28,42 C28,34.3 34.3,28 42,28 Z" />
+              <path android:strokeColor="#000000" android:strokeWidth="3" android:pathData="M41,35 L67,35 C70.9,35 74,38.1 74,42 L74,52 C74,55.9 70.9,59 67,59 L41,59 C37.1,59 34,55.9 34,52 L34,42 C34,38.1 37.1,35 41,35 Z" />
+              <path android:strokeColor="#000000" android:strokeWidth="2.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M41.5,46.5 L44.5,43 L47.5,46.5 M60.5,46.5 L63.5,43 L66.5,46.5 M50.5,49.5 Q54,53 57.5,49.5" />
+              <path android:fillColor="#000000" android:pathData="M38,65 L48,65 C50.2,65 52,66.8 52,69 C52,71.2 50.2,73 48,73 L38,73 C35.8,73 34,71.2 34,69 C34,66.8 35.8,65 38,65 Z" />
+              <path android:fillColor="#000000" android:pathData="M56,69 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+              <path android:fillColor="#000000" android:pathData="M66,69 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_launcher_background" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+              <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+          </adaptive-icon>
+          EOF
+
+          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Calki</string>
+              <string name="divide_by_zero_message">Oops, can\'t divide by 0 🙈</string>
+              <string name="format_error_message">Hmm, check that expression ✨</string>
+              <string name="history_cleared_toast">All history cleared ✨</string>
+              <string name="cd_history_button">Open calculation history</string>
+              <string name="cd_settings_button">Open calculator settings</string>
+              <string name="cd_display_swipe">Calculation display. Swipe left to delete last digit.</string>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/themes.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.Calki.Starting" parent="Theme.SplashScreen">
+                  <item name="windowSplashScreenBackground">#FFF8F0</item>
+                  <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+                  <item name="windowSplashScreenAnimationDuration">280</item>
+                  <item name="postSplashScreenTheme">@style/Theme.Calki</item>
+              </style>
+              <style name="Theme.Calki" parent="android:Theme.Material.NoActionBar" />
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/domain/model/AppThemeMode.kt
+          package com.calki.app.domain.model
+
+          enum class AppThemeMode(val label: String) {
+              SYSTEM("System"),
+              LIGHT("Light"),
+              DARK("Dark")
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/domain/model/AccentPreset.kt
+          package com.calki.app.domain.model
+
+          import androidx.compose.ui.graphics.Color
+
+          enum class AccentPreset(
+              val title: String,
+              val operatorLight: Color,
+              val operatorDark: Color,
+              val equalsLight: Color,
+              val equalsDark: Color,
+              val utilityLight: Color,
+              val utilityDark: Color
+          ) {
+              CORAL_POP(
+                  title = "Coral Pop",
+                  operatorLight = Color(0xFFFF8A65),
+                  operatorDark = Color(0xFFFF9E80),
+                  equalsLight = Color(0xFF7C5CFF),
+                  equalsDark = Color(0xFF967BFF),
+                  utilityLight = Color(0xFFFFD166),
+                  utilityDark = Color(0xFFFFDD85)
+              ),
+              MINT_FIZZ(
+                  title = "Mint Fizz",
+                  operatorLight = Color(0xFF2EC4B6),
+                  operatorDark = Color(0xFF48DFD0),
+                  equalsLight = Color(0xFF6C63FF),
+                  equalsDark = Color(0xFF8A84FF),
+                  utilityLight = Color(0xFFFFBF69),
+                  utilityDark = Color(0xFFFFCE8A)
+              ),
+              BERRY_GROOVE(
+                  title = "Berry Groove",
+                  operatorLight = Color(0xFFFF5D8F),
+                  operatorDark = Color(0xFFFF7AA2),
+                  equalsLight = Color(0xFF8338EC),
+                  equalsDark = Color(0xFF9D5CFF),
+                  utilityLight = Color(0xFFFFBE0B),
+                  utilityDark = Color(0xFFFFD147)
+              ),
+              MATCHA_SUN(
+                  title = "Matcha Sun",
+                  operatorLight = Color(0xFF6A994E),
+                  operatorDark = Color(0xFF88B76B),
+                  equalsLight = Color(0xFFBC4749),
+                  equalsDark = Color(0xFFD86567),
+                  utilityLight = Color(0xFFF2CC8F),
+                  utilityDark = Color(0xFFF7DBA7)
+              )
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/domain/model/UserSettings.kt
+          package com.calki.app.domain.model
+
+          data class UserSettings(
+              val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+              val hapticsEnabled: Boolean = true,
+              val soundEnabled: Boolean = false,
+              val decimalPlaces: Int = 8,
+              val accentPreset: AccentPreset = AccentPreset.CORAL_POP
+          )
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/domain/model/CalculatorKey.kt
+          package com.calki.app.domain.model
+
+          enum class KeyCategory {
+              NUMBER, OPERATOR, UTILITY, EQUALS, SCIENTIFIC
+          }
+
+          enum class CalculatorKey(
+              val label: String,
+              val token: String = label,
+              val category: KeyCategory,
+              val contentDescription: String
+          ) {
+              CLEAR("C", "", KeyCategory.UTILITY, "Clear expression. Long press to clear all history"),
+              BACKSPACE("⌫", "", KeyCategory.UTILITY, "Delete last character"),
+              PERCENT("%", "%", KeyCategory.UTILITY, "Percent"),
+              PLUS_MINUS("+/−", "", KeyCategory.UTILITY, "Toggle positive or negative"),
+              DIVIDE("÷", "÷", KeyCategory.OPERATOR, "Divide"),
+              MULTIPLY("×", "×", KeyCategory.OPERATOR, "Multiply"),
+              SUBTRACT("−", "−", KeyCategory.OPERATOR, "Subtract"),
+              ADD("+", "+", KeyCategory.OPERATOR, "Add"),
+              EQUALS("=", "=", KeyCategory.EQUALS, "Equals"),
+              ZERO("0", "0", KeyCategory.NUMBER, "Zero"),
+              ONE("1", "1", KeyCategory.NUMBER, "One"),
+              TWO("2", "2", KeyCategory.NUMBER, "Two"),
+              THREE("3", "3", KeyCategory.NUMBER, "Three"),
+              FOUR("4", "4", KeyCategory.NUMBER, "Four"),
+              FIVE("5", "5", KeyCategory.NUMBER, "Five"),
+              SIX("6", "6", KeyCategory.NUMBER, "Six"),
+              SEVEN("7", "7", KeyCategory.NUMBER, "Seven"),
+              EIGHT("8", "8", KeyCategory.NUMBER, "Eight"),
+              NINE("9", "9", KeyCategory.NUMBER, "Nine"),
+              DECIMAL(".", ".", KeyCategory.NUMBER, "Decimal point"),
+              SIN("sin", "sin(", KeyCategory.SCIENTIFIC, "Sine"),
+              COS("cos", "cos(", KeyCategory.SCIENTIFIC, "Cosine"),
+              TAN("tan", "tan(", KeyCategory.SCIENTIFIC, "Tangent"),
+              LOG("log", "log(", KeyCategory.SCIENTIFIC, "Base 10 logarithm"),
+              LN("ln", "ln(", KeyCategory.SCIENTIFIC, "Natural logarithm"),
+              SQRT("√", "√(", KeyCategory.SCIENTIFIC, "Square root"),
+              SQUARE("x²", "^2", KeyCategory.SCIENTIFIC, "Square"),
+              POWER("xʸ", "^", KeyCategory.SCIENTIFIC, "Power"),
+              PI("π", "π", KeyCategory.SCIENTIFIC, "Pi constant"),
+              E("e", "e", KeyCategory.SCIENTIFIC, "Euler's constant"),
+              LEFT_PAREN("(", "(", KeyCategory.SCIENTIFIC, "Left parenthesis"),
+              RIGHT_PAREN(")", ")", KeyCategory.SCIENTIFIC, "Right parenthesis")
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/domain/evaluator/EvalResult.kt
+          package com.calki.app.domain.evaluator
+
+          import java.math.BigDecimal
+
+          sealed interface EvalResult {
+              data class Success(val rawValue: BigDecimal, val formattedValue: String) : EvalResult
+              data object DivideByZero : EvalResult
+              data object InvalidExpression : EvalResult
+              data object Empty : EvalResult
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/domain/evaluator/ExpressionEvaluator.kt
+          package com.calki.app.domain.evaluator
+
+          import java.math.BigDecimal
+          import java.math.MathContext
+          import java.math.RoundingMode
+          import java.text.DecimalFormat
+          import java.text.DecimalFormatSymbols
+          import java.util.ArrayDeque
+          import java.util.Locale
+          import kotlin.math.cos
+          import kotlin.math.ln
+          import kotlin.math.log10
+          import kotlin.math.pow
+          import kotlin.math.sin
+          import kotlin.math.sqrt
+          import kotlin.math.tan
+
+          class ExpressionEvaluator {
+              private val mc = MathContext(34, RoundingMode.HALF_UP)
+
+              private sealed interface Token {
+                  data class NumberToken(val value: BigDecimal) : Token
+                  data class OperatorToken(val symbol: String) : Token
+                  data class FunctionToken(val name: String) : Token
+                  data object LeftParen : Token
+                  data object RightParen : Token
+                  data object Percent : Token
+              }
+
+              fun evaluate(
+                  expression: String,
+                  maxDecimalPlaces: Int = 8,
+                  stripTrailingOperatorsForLivePreview: Boolean = false
+              ): EvalResult {
+                  var cleaned = expression.replace(",", "").replace(" ", "")
+                  if (cleaned.isEmpty()) return EvalResult.Empty
+
+                  if (stripTrailingOperatorsForLivePreview) {
+                      cleaned = cleaned.trimEnd { it in listOf('+', '−', '-', '×', '*', '÷', '/', '^', '.') }
+                      if (cleaned.isEmpty()) return EvalResult.Empty
+                  }
+
+                  val openParens = cleaned.count { it == '(' }
+                  val closeParens = cleaned.count { it == ')' }
+                  if (openParens > closeParens) {
+                      cleaned += ")".repeat(openParens - closeParens)
+                  }
+
+                  return try {
+                      val tokens = tokenize(cleaned)
+                      if (tokens.isEmpty()) return EvalResult.Empty
+                      val rpn = shuntingYard(tokens)
+                      val result = evaluateRpn(rpn)
+                      EvalResult.Success(
+                          rawValue = result,
+                          formattedValue = formatNumber(result, maxDecimalPlaces)
+                      )
+                  } catch (e: ArithmeticException) {
+                      if (e.message == DIV_ZERO) EvalResult.DivideByZero else EvalResult.InvalidExpression
+                  } catch (_: Exception) {
+                      EvalResult.InvalidExpression
+                  }
+              }
+
+              fun formatInputExpression(rawExpression: String): String {
+                  if (rawExpression.isEmpty()) return ""
+                  val numberRegex = Regex("""(?<![a-zA-Z0-9.])[0-9]+(\.[0-9]*)?""")
+                  return numberRegex.replace(rawExpression) { match ->
+                      val text = match.value
+                      val parts = text.split(".")
+                      val intPart = parts[0].toBigIntegerOrNull() ?: return@replace text
+                      val symbols = DecimalFormatSymbols(Locale.US)
+                      val formatter = DecimalFormat("#,###", symbols)
+                      val formattedInt = formatter.format(intPart)
+                      if (parts.size > 1) "$formattedInt.${parts[1]}" else formattedInt
+                  }
+              }
+
+              fun formatNumber(value: BigDecimal, maxDecimalPlaces: Int): String {
+                  val stripped = value.stripTrailingZeros()
+                  if (stripped.compareTo(BigDecimal.ZERO) == 0) return "0"
+                  val absVal = stripped.abs()
+                  val symbols = DecimalFormatSymbols(Locale.US)
+
+                  if (absVal >= BigDecimal("1000000000000") ||
+                      (absVal > BigDecimal.ZERO && absVal < BigDecimal("0.000001"))
+                  ) {
+                      val pattern = "0." + "#".repeat(maxDecimalPlaces.coerceIn(1, 10)) + "E0"
+                      val sciFormatter = DecimalFormat(pattern, symbols)
+                      sciFormatter.roundingMode = RoundingMode.HALF_UP
+                      return sciFormatter.format(stripped)
+                  }
+
+                  val rounded = stripped.setScale(maxDecimalPlaces, RoundingMode.HALF_UP).stripTrailingZeros()
+                  val pattern = if (maxDecimalPlaces > 0) "#,##0." + "#".repeat(maxDecimalPlaces) else "#,##0"
+                  val formatter = DecimalFormat(pattern, symbols)
+                  formatter.roundingMode = RoundingMode.HALF_UP
+                  return formatter.format(rounded)
+              }
+
+              private fun tokenize(expr: String): List<Token> {
+                  val rawTokens = mutableListOf<Token>()
+                  var i = 0
+                  val normalized = expr.replace('−', '-').replace('×', '*').replace('÷', '/')
+
+                  while (i < normalized.length) {
+                      val c = normalized[i]
+                      when {
+                          c.isDigit() || c == '.' -> {
+                              val start = i
+                              var dotCount = 0
+                              while (i < normalized.length && (normalized[i].isDigit() || normalized[i] == '.')) {
+                                  if (normalized[i] == '.') dotCount++
+                                  if (dotCount > 1) throw IllegalArgumentException("Multiple decimals")
+                                  i++
+                              }
+                              val numStr = normalized.substring(start, i)
+                              val bd = if (numStr == ".") BigDecimal.ZERO else BigDecimal(numStr)
+                              rawTokens.add(Token.NumberToken(bd))
+                          }
+                          c == 'π' -> {
+                              rawTokens.add(Token.NumberToken(BigDecimal(Math.PI.toString())))
+                              i++
+                          }
+                          c == 'e' -> {
+                              rawTokens.add(Token.NumberToken(BigDecimal(Math.E.toString())))
+                              i++
+                          }
+                          c == '√' -> {
+                              rawTokens.add(Token.FunctionToken("sqrt"))
+                              i++
+                          }
+                          c.isLetter() -> {
+                              val start = i
+                              while (i < normalized.length && normalized[i].isLetter()) i++
+                              rawTokens.add(Token.FunctionToken(normalized.substring(start, i)))
+                          }
+                          c == '(' -> { rawTokens.add(Token.LeftParen); i++ }
+                          c == ')' -> { rawTokens.add(Token.RightParen); i++ }
+                          c == '%' -> { rawTokens.add(Token.Percent); i++ }
+                          c in listOf('+', '-', '*', '/', '^') -> {
+                              val isUnaryMinus = c == '-' && (rawTokens.isEmpty() ||
+                                      rawTokens.last() is Token.OperatorToken ||
+                                      rawTokens.last() is Token.LeftParen)
+                              rawTokens.add(Token.OperatorToken(if (isUnaryMinus) "u-" else c.toString()))
+                              i++
+                          }
+                          else -> throw IllegalArgumentException("Unexpected char: $c")
+                      }
+                  }
+
+                  val result = mutableListOf<Token>()
+                  for (idx in rawTokens.indices) {
+                      val current = rawTokens[idx]
+                      if (idx > 0) {
+                          val prev = rawTokens[idx - 1]
+                          val prevIsValue = prev is Token.NumberToken || prev is Token.RightParen || prev is Token.Percent
+                          val currStartsValue = current is Token.NumberToken || current is Token.LeftParen || current is Token.FunctionToken
+                          if (prevIsValue && currStartsValue) {
+                              result.add(Token.OperatorToken("*"))
+                          }
+                      }
+                      result.add(current)
+                  }
+                  return result
+              }
+
+              private fun shuntingYard(tokens: List<Token>): List<Token> {
+                  val output = mutableListOf<Token>()
+                  val stack = ArrayDeque<Token>()
+
+                  fun precedence(op: String): Int = when (op) {
+                      "+", "-" -> 1
+                      "*", "/" -> 2
+                      "^" -> 3
+                      "u-" -> 4
+                      else -> 0
+                  }
+                  fun isRightAssociative(op: String): Boolean = op == "^" || op == "u-"
+
+                  for (token in tokens) {
+                      when (token) {
+                          is Token.NumberToken, is Token.Percent -> output.add(token)
+                          is Token.FunctionToken, is Token.LeftParen -> stack.push(token)
+                          is Token.RightParen -> {
+                              while (stack.isNotEmpty() && stack.peek() !is Token.LeftParen) {
+                                  output.add(stack.pop())
+                              }
+                              if (stack.isEmpty() || stack.peek() !is Token.LeftParen) {
+                                  throw IllegalArgumentException("Mismatched parentheses")
+                              }
+                              stack.pop()
+                              if (stack.isNotEmpty() && stack.peek() is Token.FunctionToken) {
+                                  output.add(stack.pop())
+                              }
+                          }
+                          is Token.OperatorToken -> {
+                              while (stack.isNotEmpty()) {
+                                  val top = stack.peek()
+                                  if (top is Token.OperatorToken) {
+                                      val p1 = precedence(token.symbol)
+                                      val p2 = precedence(top.symbol)
+                                      if ((!isRightAssociative(token.symbol) && p1 <= p2) ||
+                                          (isRightAssociative(token.symbol) && p1 < p2)
+                                      ) {
+                                          output.add(stack.pop())
+                                          continue
+                                      }
+                                  }
+                                  break
+                              }
+                              stack.push(token)
+                          }
+                      }
+                  }
+                  while (stack.isNotEmpty()) {
+                      val top = stack.pop()
+                      if (top is Token.LeftParen || top is Token.RightParen) {
+                          throw IllegalArgumentException("Mismatched parentheses")
+                      }
+                      output.add(top)
+                  }
+                  return output
+              }
+
+              private fun evaluateRpn(rpn: List<Token>): BigDecimal {
+                  val stack = ArrayDeque<BigDecimal>()
+                  val hundred = BigDecimal("100")
+                  var i = 0
+                  while (i < rpn.size) {
+                      when (val token = rpn[i]) {
+                          is Token.NumberToken -> stack.push(token.value)
+                          is Token.Percent -> {
+                              val current = stack.pop()
+                              val nextToken = rpn.getOrNull(i + 1)
+                              if (stack.isNotEmpty() && nextToken is Token.OperatorToken &&
+                                  (nextToken.symbol == "+" || nextToken.symbol == "-")
+                              ) {
+                                  val base = stack.peek()
+                                  stack.push(base.multiply(current, mc).divide(hundred, mc))
+                              } else {
+                                  stack.push(current.divide(hundred, mc))
+                              }
+                          }
+                          is Token.OperatorToken -> {
+                              if (token.symbol == "u-") {
+                                  stack.push(stack.pop().negate())
+                              } else {
+                                  val b = stack.pop()
+                                  val a = stack.pop()
+                                  val res = when (token.symbol) {
+                                      "+" -> a.add(b, mc)
+                                      "-" -> a.subtract(b, mc)
+                                      "*" -> a.multiply(b, mc)
+                                      "/" -> {
+                                          if (b.compareTo(BigDecimal.ZERO) == 0) throw ArithmeticException(DIV_ZERO)
+                                          a.divide(b, mc)
+                                      }
+                                      "^" -> BigDecimal.valueOf(a.toDouble().pow(b.toDouble()))
+                                      else -> throw IllegalArgumentException("Unknown op")
+                                  }
+                                  stack.push(res)
+                              }
+                          }
+                          is Token.FunctionToken -> {
+                              val arg = stack.pop().toDouble()
+                              val res = when (token.name) {
+                                  "sin" -> sin(Math.toRadians(arg))
+                                  "cos" -> cos(Math.toRadians(arg))
+                                  "tan" -> tan(Math.toRadians(arg))
+                                  "log" -> log10(arg)
+                                  "ln" -> ln(arg)
+                                  "sqrt" -> sqrt(arg)
+                                  else -> throw IllegalArgumentException("Unknown func")
+                              }
+                              stack.push(BigDecimal.valueOf(res).setScale(12, RoundingMode.HALF_UP).stripTrailingZeros())
+                          }
+                          else -> throw IllegalArgumentException("Unexpected token")
+                      }
+                      i++
+                  }
+                  if (stack.size != 1) throw IllegalArgumentException("Invalid stack")
+                  return stack.pop()
+              }
+
+              companion object {
+                  private const val DIV_ZERO = "DIV_ZERO"
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/data/local/CalculationEntity.kt
+          package com.calki.app.data.local
+
+          import androidx.room.Entity
+          import androidx.room.PrimaryKey
+
+          @Entity(tableName = "calculation_history")
+          data class CalculationEntity(
+              @PrimaryKey(autoGenerate = true) val id: Long = 0,
+              val expression: String,
+              val result: String,
+              val timestamp: Long = System.currentTimeMillis()
+          )
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/data/local/HistoryDao.kt
+          package com.calki.app.data.local
+
+          import androidx.room.Dao
+          import androidx.room.Delete
+          import androidx.room.Insert
+          import androidx.room.OnConflictStrategy
+          import androidx.room.Query
+          import kotlinx.coroutines.flow.Flow
+
+          @Dao
+          interface HistoryDao {
+              @Query("SELECT * FROM calculation_history ORDER BY timestamp DESC")
+              fun observeAll(): Flow<List<CalculationEntity>>
+
+              @Insert(onConflict = OnConflictStrategy.REPLACE)
+              suspend fun insert(item: CalculationEntity)
+
+              @Delete
+              suspend fun delete(item: CalculationEntity)
+
+              @Query("DELETE FROM calculation_history")
+              suspend fun clearAll()
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/data/local/CalkiDatabase.kt
+          package com.calki.app.data.local
+
+          import androidx.room.Database
+          import androidx.room.RoomDatabase
+
+          @Database(entities = [CalculationEntity::class], version = 1, exportSchema = false)
+          abstract class CalkiDatabase : RoomDatabase() {
+              abstract fun historyDao(): HistoryDao
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/data/preferences/SettingsDataStore.kt
+          package com.calki.app.data.preferences
+
+          import android.content.Context
+          import androidx.datastore.core.DataStore
+          import androidx.datastore.preferences.core.Preferences
+          import androidx.datastore.preferences.core.booleanPreferencesKey
+          import androidx.datastore.preferences.core.edit
+          import androidx.datastore.preferences.core.intPreferencesKey
+          import androidx.datastore.preferences.core.stringPreferencesKey
+          import androidx.datastore.preferences.preferencesDataStore
+          import com.calki.app.domain.model.AccentPreset
+          import com.calki.app.domain.model.AppThemeMode
+          import com.calki.app.domain.model.UserSettings
+          import dagger.hilt.android.qualifiers.ApplicationContext
+          import kotlinx.coroutines.flow.Flow
+          import kotlinx.coroutines.flow.map
+          import javax.inject.Inject
+          import javax.inject.Singleton
+
+          private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "calki_settings")
+
+          @Singleton
+          class SettingsDataStore @Inject constructor(@ApplicationContext private val context: Context) {
+              private object Keys {
+                  val THEME_MODE = stringPreferencesKey("theme_mode")
+                  val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
+                  val SOUND_ENABLED = booleanPreferencesKey("sound_enabled")
+                  val DECIMAL_PLACES = intPreferencesKey("decimal_places")
+                  val ACCENT_PRESET = stringPreferencesKey("accent_preset")
+              }
+
+              val settingsFlow: Flow<UserSettings> = context.dataStore.data.map { prefs ->
+                  UserSettings(
+                      themeMode = prefs[Keys.THEME_MODE]?.let { runCatching { AppThemeMode.valueOf(it) }.getOrNull() } ?: AppThemeMode.SYSTEM,
+                      hapticsEnabled = prefs[Keys.HAPTICS_ENABLED] ?: true,
+                      soundEnabled = prefs[Keys.SOUND_ENABLED] ?: false,
+                      decimalPlaces = prefs[Keys.DECIMAL_PLACES] ?: 8,
+                      accentPreset = prefs[Keys.ACCENT_PRESET]?.let { runCatching { AccentPreset.valueOf(it) }.getOrNull() } ?: AccentPreset.CORAL_POP
+                  )
+              }
+
+              suspend fun setThemeMode(mode: AppThemeMode) { context.dataStore.edit { it[Keys.THEME_MODE] = mode.name } }
+              suspend fun setHapticsEnabled(enabled: Boolean) { context.dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled } }
+              suspend fun setSoundEnabled(enabled: Boolean) { context.dataStore.edit { it[Keys.SOUND_ENABLED] = enabled } }
+              suspend fun setDecimalPlaces(places: Int) { context.dataStore.edit { it[Keys.DECIMAL_PLACES] = places.coerceIn(0, 10) } }
+              suspend fun setAccentPreset(preset: AccentPreset) { context.dataStore.edit { it[Keys.ACCENT_PRESET] = preset.name } }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/data/repository/CalculatorRepository.kt
+          package com.calki.app.data.repository
+
+          import com.calki.app.data.local.CalculationEntity
+          import com.calki.app.data.local.HistoryDao
+          import com.calki.app.data.preferences.SettingsDataStore
+          import com.calki.app.domain.model.AccentPreset
+          import com.calki.app.domain.model.AppThemeMode
+          import com.calki.app.domain.model.UserSettings
+          import kotlinx.coroutines.flow.Flow
+          import javax.inject.Inject
+          import javax.inject.Singleton
+
+          @Singleton
+          class CalculatorRepository @Inject constructor(
+              private val historyDao: HistoryDao,
+              private val settingsDataStore: SettingsDataStore
+          ) {
+              val historyFlow: Flow<List<CalculationEntity>> = historyDao.observeAll()
+              val settingsFlow: Flow<UserSettings> = settingsDataStore.settingsFlow
+
+              suspend fun addHistory(expression: String, result: String) {
+                  historyDao.insert(CalculationEntity(expression = expression, result = result))
+              }
+              suspend fun deleteHistoryItem(item: CalculationEntity) = historyDao.delete(item)
+              suspend fun clearAllHistory() = historyDao.clearAll()
+              suspend fun updateTheme(mode: AppThemeMode) = settingsDataStore.setThemeMode(mode)
+              suspend fun updateHaptics(enabled: Boolean) = settingsDataStore.setHapticsEnabled(enabled)
+              suspend fun updateSound(enabled: Boolean) = settingsDataStore.setSoundEnabled(enabled)
+              suspend fun updateDecimalPlaces(places: Int) = settingsDataStore.setDecimalPlaces(places)
+              suspend fun updateAccentPreset(preset: AccentPreset) = settingsDataStore.setAccentPreset(preset)
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/di/AppModule.kt
+          package com.calki.app.di
+
+          import android.content.Context
+          import androidx.room.Room
+          import com.calki.app.data.local.CalkiDatabase
+          import com.calki.app.data.local.HistoryDao
+          import com.calki.app.domain.evaluator.ExpressionEvaluator
+          import dagger.Module
+          import dagger.Provides
+          import dagger.hilt.InstallIn
+          import dagger.hilt.android.qualifiers.ApplicationContext
+          import dagger.hilt.components.SingletonComponent
+          import javax.inject.Singleton
+
+          @Module
+          @InstallIn(SingletonComponent::class)
+          object AppModule {
+              @Provides
+              @Singleton
+              fun provideDatabase(@ApplicationContext context: Context): CalkiDatabase {
+                  return Room.databaseBuilder(context, CalkiDatabase::class.java, "calki_db")
+                      .fallbackToDestructiveMigration().build()
+              }
+
+              @Provides
+              fun provideHistoryDao(db: CalkiDatabase): HistoryDao = db.historyDao()
+
+              @Provides
+              @Singleton
+              fun provideExpressionEvaluator(): ExpressionEvaluator = ExpressionEvaluator()
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/theme/Color.kt
+          package com.calki.app.ui.theme
+
+          import androidx.compose.ui.graphics.Color
+
+          val LightBackground = Color(0xFFFFF8F0)
+          val LightSurfaceCard = Color(0xFFFFF1E2)
+          val LightKeySurface = Color(0xFFFFFFFF)
+          val LightOnBackground = Color(0xFF211E33)
+          val LightOnSurfaceVariant = Color(0xFF6E6882)
+
+          val DarkBackground = Color(0xFF14121F)
+          val DarkSurfaceCard = Color(0xFF1B182B)
+          val DarkKeySurface = Color(0xFF211E33)
+          val DarkOnBackground = Color(0xFFF7F2FF)
+          val DarkOnSurfaceVariant = Color(0xFFA69FBF)
+
+          val CoralLight = Color(0xFFFF8A65)
+          val VioletLight = Color(0xFF7C5CFF)
+          val SunYellowLight = Color(0xFFFFD166)
+          val BlushPink = Color(0xFFFF8FA3)
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/theme/Shape.kt
+          package com.calki.app.ui.theme
+
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.Shapes
+          import androidx.compose.ui.unit.dp
+
+          val CalkiShapes = Shapes(
+              small = RoundedCornerShape(18.dp),
+              medium = RoundedCornerShape(24.dp),
+              large = RoundedCornerShape(32.dp),
+              extraLarge = RoundedCornerShape(40.dp)
+          )
+
+          val FunkyBlobKeyShape = RoundedCornerShape(topStart = 28.dp, topEnd = 22.dp, bottomEnd = 28.dp, bottomStart = 22.dp)
+          val PillKeyShape = RoundedCornerShape(percent = 50)
+          val DisplayCardShape = RoundedCornerShape(32.dp)
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/theme/Type.kt
+          package com.calki.app.ui.theme
+
+          import androidx.compose.material3.Typography
+          import androidx.compose.ui.text.TextStyle
+          import androidx.compose.ui.text.font.FontFamily
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.unit.sp
+
+          val RoundedSansFamily = FontFamily.SansSerif
+
+          val CalkiTypography = Typography(
+              displayLarge = TextStyle(fontFamily = RoundedSansFamily, fontWeight = FontWeight.Light, fontSize = 60.sp, lineHeight = 68.sp, letterSpacing = (-1.2).sp),
+              displayMedium = TextStyle(fontFamily = RoundedSansFamily, fontWeight = FontWeight.Light, fontSize = 42.sp, lineHeight = 50.sp, letterSpacing = (-0.5).sp),
+              headlineMedium = TextStyle(fontFamily = RoundedSansFamily, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 32.sp),
+              titleLarge = TextStyle(fontFamily = RoundedSansFamily, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
+              titleMedium = TextStyle(fontFamily = RoundedSansFamily, fontWeight = FontWeight.Medium, fontSize = 18.sp, lineHeight = 24.sp),
+              bodyLarge = TextStyle(fontFamily = RoundedSansFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
+              labelLarge = TextStyle(fontFamily = RoundedSansFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp)
+          )
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/theme/Theme.kt
+          package com.calki.app.ui.theme
+
+          import android.content.Context
+          import android.provider.Settings
+          import androidx.compose.animation.animateColorAsState
+          import androidx.compose.animation.core.tween
+          import androidx.compose.foundation.isSystemInDarkTheme
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.darkColorScheme
+          import androidx.compose.material3.lightColorScheme
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.CompositionLocalProvider
+          import androidx.compose.runtime.Immutable
+          import androidx.compose.runtime.getValue
+          import androidx.compose.runtime.remember
+          import androidx.compose.runtime.staticCompositionLocalOf
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.platform.LocalContext
+          import com.calki.app.domain.model.AccentPreset
+          import com.calki.app.domain.model.AppThemeMode
+
+          @Immutable
+          data class CalkiPalette(
+              val background: Color,
+              val displayCard: Color,
+              val numberKey: Color,
+              val onNumberKey: Color,
+              val operatorKey: Color,
+              val onOperatorKey: Color,
+              val equalsKey: Color,
+              val onEqualsKey: Color,
+              val utilityKey: Color,
+              val onUtilityKey: Color,
+              val scientificKey: Color,
+              val onScientificKey: Color,
+              val textPrimary: Color,
+              val textSecondary: Color,
+              val isDark: Boolean
+          )
+
+          val LocalCalkiPalette = staticCompositionLocalOf {
+              CalkiPalette(
+                  background = LightBackground, displayCard = LightSurfaceCard, numberKey = LightKeySurface,
+                  onNumberKey = LightOnBackground, operatorKey = CoralLight, onOperatorKey = LightOnBackground,
+                  equalsKey = VioletLight, onEqualsKey = Color.White, utilityKey = SunYellowLight,
+                  onUtilityKey = LightOnBackground, scientificKey = LightSurfaceCard, onScientificKey = LightOnBackground,
+                  textPrimary = LightOnBackground, textSecondary = LightOnSurfaceVariant, isDark = false
+              )
+          }
+
+          val LocalReduceMotion = staticCompositionLocalOf { false }
+
+          @Composable
+          fun rememberReduceMotion(): Boolean {
+              val context = LocalContext.current
+              return remember(context) {
+                  val scale = runCatching {
+                      Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+                  }.getOrDefault(1f)
+                  scale == 0f
+              }
+          }
+
+          @Composable
+          fun CalkiTheme(
+              themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+              accentPreset: AccentPreset = AccentPreset.CORAL_POP,
+              content: @Composable () -> Unit
+          ) {
+              val systemDark = isSystemInDarkTheme()
+              val isDark = when (themeMode) {
+                  AppThemeMode.SYSTEM -> systemDark
+                  AppThemeMode.LIGHT -> false
+                  AppThemeMode.DARK -> true
+              }
+
+              val reduceMotion = rememberReduceMotion()
+              val animDuration = if (reduceMotion) 0 else 240
+
+              val bg by animateColorAsState(if (isDark) DarkBackground else LightBackground, tween(animDuration), label = "bg")
+              val card by animateColorAsState(if (isDark) DarkSurfaceCard else LightSurfaceCard, tween(animDuration), label = "card")
+              val numKey by animateColorAsState(if (isDark) DarkKeySurface else LightKeySurface, tween(animDuration), label = "numKey")
+              val opKey by animateColorAsState(if (isDark) accentPreset.operatorDark else accentPreset.operatorLight, tween(animDuration), label = "opKey")
+              val eqKey by animateColorAsState(if (isDark) accentPreset.equalsDark else accentPreset.equalsLight, tween(animDuration), label = "eqKey")
+              val utilKey by animateColorAsState(if (isDark) accentPreset.utilityDark else accentPreset.utilityLight, tween(animDuration), label = "utilKey")
+              val textPrimary by animateColorAsState(if (isDark) DarkOnBackground else LightOnBackground, tween(animDuration), label = "textPrimary")
+              val textSecondary by animateColorAsState(if (isDark) DarkOnSurfaceVariant else LightOnSurfaceVariant, tween(animDuration), label = "textSecondary")
+
+              val calkiPalette = CalkiPalette(
+                  background = bg, displayCard = card, numberKey = numKey, onNumberKey = textPrimary,
+                  operatorKey = opKey, onOperatorKey = Color(0xFF14121F), equalsKey = eqKey, onEqualsKey = Color.White,
+                  utilityKey = utilKey, onUtilityKey = Color(0xFF14121F), scientificKey = card, onScientificKey = textPrimary,
+                  textPrimary = textPrimary, textSecondary = textSecondary, isDark = isDark
+              )
+
+              val colorScheme = if (isDark) {
+                  darkColorScheme(background = bg, surface = card, primary = eqKey, secondary = opKey, tertiary = utilKey, onBackground = textPrimary, onSurface = textPrimary)
+              } else {
+                  lightColorScheme(background = bg, surface = card, primary = eqKey, secondary = opKey, tertiary = utilKey, onBackground = textPrimary, onSurface = textPrimary)
+              }
+
+              CompositionLocalProvider(LocalCalkiPalette provides calkiPalette, LocalReduceMotion provides reduceMotion) {
+                  MaterialTheme(colorScheme = colorScheme, typography = CalkiTypography, shapes = CalkiShapes, content = content)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/CalculatorState.kt
+          package com.calki.app.ui
+
+          import com.calki.app.data.local.CalculationEntity
+          import com.calki.app.domain.model.UserSettings
+
+          data class CalculatorState(
+              val expression: String = "",
+              val formattedExpression: String = "",
+              val livePreview: String = "",
+              val lastExpressionPeek: String = "",
+              val errorMessage: String? = null,
+              val isResultCommitted: Boolean = false,
+              val evaluationSparkleTrigger: Int = 0,
+              val history: List<CalculationEntity> = emptyList(),
+              val settings: UserSettings = UserSettings()
+          )
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/CalculatorViewModel.kt
+          package com.calki.app.ui
+
+          import androidx.lifecycle.SavedStateHandle
+          import androidx.lifecycle.ViewModel
+          import androidx.lifecycle.viewModelScope
+          import com.calki.app.data.local.CalculationEntity
+          import com.calki.app.data.repository.CalculatorRepository
+          import com.calki.app.domain.evaluator.EvalResult
+          import com.calki.app.domain.evaluator.ExpressionEvaluator
+          import com.calki.app.domain.model.AccentPreset
+          import com.calki.app.domain.model.AppThemeMode
+          import com.calki.app.domain.model.CalculatorKey
+          import com.calki.app.domain.model.KeyCategory
+          import dagger.hilt.android.lifecycle.HiltViewModel
+          import kotlinx.coroutines.flow.MutableStateFlow
+          import kotlinx.coroutines.flow.SharingStarted
+          import kotlinx.coroutines.flow.StateFlow
+          import kotlinx.coroutines.flow.combine
+          import kotlinx.coroutines.flow.stateIn
+          import kotlinx.coroutines.flow.update
+          import kotlinx.coroutines.launch
+          import javax.inject.Inject
+
+          @HiltViewModel
+          class CalculatorViewModel @Inject constructor(
+              private val repository: CalculatorRepository,
+              private val evaluator: ExpressionEvaluator,
+              private val savedStateHandle: SavedStateHandle
+          ) : ViewModel() {
+
+              private val internalState = MutableStateFlow(
+                  CalculatorState(
+                      expression = savedStateHandle[KEY_EXPR] ?: "",
+                      lastExpressionPeek = savedStateHandle[KEY_PEEK] ?: "",
+                      isResultCommitted = savedStateHandle[KEY_COMMITTED] ?: false
+                  )
+              )
+
+              val uiState: StateFlow<CalculatorState> = combine(
+                  internalState,
+                  repository.historyFlow,
+                  repository.settingsFlow
+              ) { calcState, history, settings ->
+                  val formattedExpr = evaluator.formatInputExpression(calcState.expression)
+                  val live = computeLivePreview(calcState.expression, settings.decimalPlaces, calcState.isResultCommitted)
+                  calcState.copy(
+                      formattedExpression = formattedExpr,
+                      livePreview = live,
+                      history = history,
+                      settings = settings,
+                      lastExpressionPeek = calcState.lastExpressionPeek.ifEmpty {
+                          history.firstOrNull()?.let { "${it.expression} = ${it.result}" } ?: ""
+                      }
+                  )
+              }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CalculatorState())
+
+              fun onKeyPress(key: CalculatorKey) {
+                  when (key) {
+                      CalculatorKey.CLEAR -> updateExpression("", isCommitted = false)
+                      CalculatorKey.BACKSPACE -> deleteLastChar()
+                      CalculatorKey.EQUALS -> commitEquals()
+                      CalculatorKey.PLUS_MINUS -> toggleSign()
+                      CalculatorKey.DECIMAL -> appendDecimal()
+                      else -> appendToken(key)
+                  }
+              }
+
+              fun deleteLastChar() {
+                  val current = internalState.value.expression
+                  if (current.isEmpty()) return
+                  val multiTokens = listOf("sin(", "cos(", "tan(", "log(", "ln(", "√(")
+                  val matchedSuffix = multiTokens.firstOrNull { current.endsWith(it) }
+                  val updated = if (matchedSuffix != null) current.dropLast(matchedSuffix.length) else current.dropLast(1)
+                  updateExpression(updated, isCommitted = false)
+              }
+
+              fun onLongPressClearAllHistory() {
+                  viewModelScope.launch {
+                      repository.clearAllHistory()
+                      updateExpression("", isCommitted = false, peek = "")
+                  }
+              }
+
+              fun reuseHistoryItem(item: CalculationEntity) {
+                  updateExpression(expr = item.result.replace(",", ""), isCommitted = true, peek = "${item.expression} =")
+              }
+
+              fun deleteHistoryItem(item: CalculationEntity) = viewModelScope.launch { repository.deleteHistoryItem(item) }
+              fun clearAllHistory() = viewModelScope.launch { repository.clearAllHistory() }
+              fun updateTheme(mode: AppThemeMode) = viewModelScope.launch { repository.updateTheme(mode) }
+              fun updateHaptics(enabled: Boolean) = viewModelScope.launch { repository.updateHaptics(enabled) }
+              fun updateSound(enabled: Boolean) = viewModelScope.launch { repository.updateSound(enabled) }
+              fun updateDecimalPlaces(places: Int) = viewModelScope.launch { repository.updateDecimalPlaces(places) }
+              fun updateAccentPreset(preset: AccentPreset) = viewModelScope.launch { repository.updateAccentPreset(preset) }
+
+              private fun appendDecimal() {
+                  val state = internalState.value
+                  val expr = if (state.isResultCommitted) "" else state.expression
+                  val lastNumberSegment = expr.takeLastWhile { it.isDigit() || it == '.' }
+                  if (lastNumberSegment.contains('.')) return
+                  val prefix = if (lastNumberSegment.isEmpty()) "0." else "."
+                  updateExpression(expr + prefix, isCommitted = false)
+              }
+
+              private fun toggleSign() {
+                  val expr = internalState.value.expression
+                  if (expr.isEmpty()) {
+                      updateExpression("−", isCommitted = false)
+                      return
+                  }
+                  val regex = Regex("""([0-9.]+)$""")
+                  val match = regex.find(expr) ?: return
+                  val numberPart = match.value
+                  val startIdx = match.range.first
+                  val updated = if (startIdx >= 2 && expr.substring(startIdx - 2, startIdx) == "(−") {
+                      expr.substring(0, startIdx - 2) + numberPart
+                  } else if (startIdx == 1 && expr[0] == '−') {
+                      numberPart
+                  } else {
+                      expr.substring(0, startIdx) + "(−$numberPart"
+                  }
+                  updateExpression(updated, isCommitted = false)
+              }
+
+              private fun appendToken(key: CalculatorKey) {
+                  val state = internalState.value
+                  var current = state.expression
+                  if (state.isResultCommitted) {
+                      if (key.category == KeyCategory.NUMBER || (key.category == KeyCategory.SCIENTIFIC && key.token !in listOf("^2", "^"))) {
+                          current = ""
+                      }
+                  }
+                  if (key.category == KeyCategory.OPERATOR) {
+                      if (current.isEmpty()) {
+                          if (key == CalculatorKey.SUBTRACT) updateExpression("−", isCommitted = false)
+                          return
+                      }
+                      if (current.last() in listOf('+', '−', '×', '÷', '^')) {
+                          current = current.dropLast(1)
+                      }
+                  }
+                  updateExpression(current + key.token, isCommitted = false)
+              }
+
+              private fun commitEquals() {
+                  val state = uiState.value
+                  val expr = state.expression
+                  if (expr.isEmpty()) return
+
+                  when (val result = evaluator.evaluate(expr, state.settings.decimalPlaces, false)) {
+                      is EvalResult.Success -> {
+                          val formattedInput = evaluator.formatInputExpression(expr)
+                          val formattedOutput = result.formattedValue
+                          viewModelScope.launch { repository.addHistory(formattedInput, formattedOutput) }
+                          val rawNext = formattedOutput.replace(",", "")
+                          savedStateHandle[KEY_EXPR] = rawNext
+                          savedStateHandle[KEY_PEEK] = "$formattedInput ="
+                          savedStateHandle[KEY_COMMITTED] = true
+                          internalState.update {
+                              it.copy(
+                                  expression = rawNext,
+                                  lastExpressionPeek = "$formattedInput =",
+                                  errorMessage = null,
+                                  isResultCommitted = true,
+                                  evaluationSparkleTrigger = it.evaluationSparkleTrigger + 1
+                              )
+                          }
+                      }
+                      is EvalResult.DivideByZero -> internalState.update { it.copy(errorMessage = "Oops, can't divide by 0 🙈") }
+                      is EvalResult.InvalidExpression -> internalState.update { it.copy(errorMessage = "Hmm, check that expression ✨") }
+                      is EvalResult.Empty -> Unit
+                  }
+              }
+
+              private fun computeLivePreview(expression: String, decimalPlaces: Int, isCommitted: Boolean): String {
+                  if (isCommitted || expression.isEmpty()) return ""
+                  val hasOperator = expression.drop(if (expression.startsWith("−")) 1 else 0).any { !it.isDigit() && it != '.' }
+                  if (!hasOperator) return ""
+                  return when (val res = evaluator.evaluate(expression, decimalPlaces, true)) {
+                      is EvalResult.Success -> res.formattedValue
+                      is EvalResult.DivideByZero -> "Oops, can't divide by 0 🙈"
+                      else -> ""
+                  }
+              }
+
+              private fun updateExpression(expr: String, isCommitted: Boolean, peek: String? = null) {
+                  savedStateHandle[KEY_EXPR] = expr
+                  savedStateHandle[KEY_COMMITTED] = isCommitted
+                  if (peek != null) savedStateHandle[KEY_PEEK] = peek
+                  internalState.update {
+                      it.copy(expression = expr, lastExpressionPeek = peek ?: it.lastExpressionPeek, errorMessage = null, isResultCommitted = isCommitted)
+                  }
+              }
+
+              companion object {
+                  private const val KEY_EXPR = "saved_expression"
+                  private const val KEY_PEEK = "saved_peek"
+                  private const val KEY_COMMITTED = "saved_committed"
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/components/SoundFeedbackManager.kt
+          package com.calki.app.ui.components
+
+          import android.content.Context
+          import android.media.AudioManager
+          import android.view.HapticFeedbackConstants
+          import android.view.View
+
+          object FeedbackHelper {
+              fun performFeedback(view: View, hapticsEnabled: Boolean, soundEnabled: Boolean, isLongPress: Boolean = false) {
+                  if (hapticsEnabled) {
+                      val constant = if (isLongPress) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP
+                      view.performHapticFeedback(constant)
+                  }
+                  if (soundEnabled) {
+                      val audioManager = view.context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                      audioManager?.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.45f)
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/components/SparkleOverlay.kt
+          package com.calki.app.ui.components
+
+          import androidx.compose.animation.core.Animatable
+          import androidx.compose.animation.core.FastOutSlowInEasing
+          import androidx.compose.animation.core.tween
+          import androidx.compose.foundation.Canvas
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.LaunchedEffect
+          import androidx.compose.runtime.remember
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.geometry.Offset
+          import androidx.compose.ui.graphics.Color
+          import com.calki.app.ui.theme.BlushPink
+          import com.calki.app.ui.theme.CoralLight
+          import com.calki.app.ui.theme.LocalReduceMotion
+          import com.calki.app.ui.theme.SunYellowLight
+          import com.calki.app.ui.theme.VioletLight
+          import kotlin.math.cos
+          import kotlin.math.sin
+
+          private data class SparkleParticle(val angleRad: Float, val speed: Float, val color: Color, val radius: Float)
+
+          @Composable
+          fun SparkleOverlay(trigger: Int, modifier: Modifier = Modifier) {
+              val reduceMotion = LocalReduceMotion.current
+              val progress = remember { Animatable(1f) }
+              val particles = remember {
+                  val colors = listOf(SunYellowLight, CoralLight, VioletLight, BlushPink)
+                  List(14) { idx ->
+                      SparkleParticle(
+                          angleRad = (idx * (360f / 14f)) * (Math.PI.toFloat() / 180f),
+                          speed = if (idx % 2 == 0) 110f else 70f,
+                          color = colors[idx % colors.size],
+                          radius = if (idx % 3 == 0) 9f else 6f
+                      )
+                  }
+              }
+
+              LaunchedEffect(trigger) {
+                  if (trigger > 0 && !reduceMotion) {
+                      progress.snapTo(0f)
+                      progress.animateTo(1f, tween(durationMillis = 280, easing = FastOutSlowInEasing))
+                  }
+              }
+
+              if (progress.value < 1f && !reduceMotion) {
+                  Canvas(modifier = modifier.fillMaxSize()) {
+                      val t = progress.value
+                      val alpha = (1f - t).coerceIn(0f, 1f)
+                      val center = Offset(size.width * 0.82f, size.height * 0.65f)
+                      particles.forEach { p ->
+                          val dist = p.speed * t
+                          drawCircle(
+                              color = p.color.copy(alpha = alpha),
+                              radius = p.radius * (1f - t * 0.4f),
+                              center = Offset(center.x + cos(p.angleRad) * dist, center.y + sin(p.angleRad) * dist)
+                          )
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/components/CalkiKeyButton.kt
+          package com.calki.app.ui.components
+
+          import androidx.compose.animation.core.Spring
+          import androidx.compose.animation.core.animateFloatAsState
+          import androidx.compose.animation.core.spring
+          import androidx.compose.animation.core.tween
+          import androidx.compose.foundation.ExperimentalFoundationApi
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.combinedClickable
+          import androidx.compose.foundation.interaction.MutableInteractionSource
+          import androidx.compose.foundation.interaction.collectIsPressedAsState
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.defaultMinSize
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.getValue
+          import androidx.compose.runtime.remember
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.draw.scale
+          import androidx.compose.ui.graphics.Shape
+          import androidx.compose.ui.platform.LocalView
+          import androidx.compose.ui.semantics.Role
+          import androidx.compose.ui.semantics.contentDescription
+          import androidx.compose.ui.semantics.role
+          import androidx.compose.ui.semantics.semantics
+          import androidx.compose.ui.unit.dp
+          import com.calki.app.domain.model.CalculatorKey
+          import com.calki.app.domain.model.KeyCategory
+          import com.calki.app.ui.theme.FunkyBlobKeyShape
+          import com.calki.app.ui.theme.LocalCalkiPalette
+          import com.calki.app.ui.theme.LocalReduceMotion
+          import com.calki.app.ui.theme.PillKeyShape
+
+          @OptIn(ExperimentalFoundationApi::class)
+          @Composable
+          fun CalkiKeyButton(
+              key: CalculatorKey,
+              hapticsEnabled: Boolean,
+              soundEnabled: Boolean,
+              onClick: () -> Unit,
+              onLongClick: (() -> Unit)? = null,
+              modifier: Modifier = Modifier
+          ) {
+              val palette = LocalCalkiPalette.current
+              val reduceMotion = LocalReduceMotion.current
+              val view = LocalView.current
+              val interactionSource = remember { MutableInteractionSource() }
+              val isPressed by interactionSource.collectIsPressedAsState()
+
+              val scale by animateFloatAsState(
+                  targetValue = if (isPressed && !reduceMotion) 0.92f else 1f,
+                  animationSpec = if (reduceMotion) tween(0) else spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow),
+                  label = "keyScale"
+              )
+
+              val (bgColor, contentColor, shape: Shape) = when (key.category) {
+                  KeyCategory.NUMBER -> Triple(palette.numberKey, palette.onNumberKey, RoundedCornerShape(26.dp))
+                  KeyCategory.OPERATOR -> Triple(palette.operatorKey, palette.onOperatorKey, PillKeyShape)
+                  KeyCategory.EQUALS -> Triple(palette.equalsKey, palette.onEqualsKey, PillKeyShape)
+                  KeyCategory.UTILITY -> Triple(palette.utilityKey, palette.onUtilityKey, FunkyBlobKeyShape)
+                  KeyCategory.SCIENTIFIC -> Triple(palette.scientificKey, palette.onScientificKey, FunkyBlobKeyShape)
+              }
+
+              val textStyle = if (key.category == KeyCategory.SCIENTIFIC) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineMedium
+
+              Box(
+                  contentAlignment = Alignment.Center,
+                  modifier = modifier
+                      .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                      .scale(scale)
+                      .clip(shape)
+                      .background(bgColor)
+                      .semantics {
+                          contentDescription = key.contentDescription
+                          role = Role.Button
+                      }
+                      .combinedClickable(
+                          interactionSource = interactionSource,
+                          indication = null,
+                          onClick = {
+                              FeedbackHelper.performFeedback(view, hapticsEnabled, soundEnabled)
+                              onClick()
+                          },
+                          onLongClick = onLongClick?.let {
+                              {
+                                  FeedbackHelper.performFeedback(view, hapticsEnabled, soundEnabled, isLongPress = true)
+                                  it()
+                              }
+                          }
+                      )
+                      .fillMaxSize()
+              ) {
+                  Text(text = key.label, style = textStyle, color = contentColor)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/components/CalculatorDisplay.kt
+          package com.calki.app.ui.components
+
+          import androidx.compose.animation.AnimatedContent
+          import androidx.compose.animation.SizeTransform
+          import androidx.compose.animation.core.tween
+          import androidx.compose.animation.fadeIn
+          import androidx.compose.animation.fadeOut
+          import androidx.compose.animation.slideInVertically
+          import androidx.compose.animation.slideOutVertically
+          import androidx.compose.animation.togetherWith
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.getValue
+          import androidx.compose.runtime.mutableFloatStateOf
+          import androidx.compose.runtime.remember
+          import androidx.compose.runtime.setValue
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.input.pointer.pointerInput
+          import androidx.compose.ui.platform.LocalView
+          import androidx.compose.ui.res.stringResource
+          import androidx.compose.ui.semantics.LiveRegionMode
+          import androidx.compose.ui.semantics.contentDescription
+          import androidx.compose.ui.semantics.liveRegion
+          import androidx.compose.ui.semantics.semantics
+          import androidx.compose.ui.text.style.TextAlign
+          import androidx.compose.ui.text.style.TextOverflow
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import com.calki.app.R
+          import com.calki.app.ui.theme.DisplayCardShape
+          import com.calki.app.ui.theme.LocalCalkiPalette
+          import com.calki.app.ui.theme.LocalReduceMotion
+
+          @Composable
+          fun CalculatorDisplay(
+              formattedExpression: String,
+              livePreview: String,
+              lastExpressionPeek: String,
+              errorMessage: String?,
+              evaluationSparkleTrigger: Int,
+              hapticsEnabled: Boolean,
+              soundEnabled: Boolean,
+              onSwipeDelete: () -> Unit,
+              onHistoryPeekClick: () -> Unit,
+              modifier: Modifier = Modifier
+          ) {
+              val palette = LocalCalkiPalette.current
+              val reduceMotion = LocalReduceMotion.current
+              val view = LocalView.current
+              val swipeDescription = stringResource(R.string.cd_display_swipe)
+              var dragAccumulated by remember { mutableFloatStateOf(0f) }
+
+              val primaryText = formattedExpression.ifEmpty { "0" }
+              val dynamicFontSize = when {
+                  primaryText.length > 16 -> 30.sp
+                  primaryText.length > 12 -> 38.sp
+                  primaryText.length > 8 -> 46.sp
+                  else -> 58.sp
+              }
+
+              Box(
+                  modifier = modifier
+                      .fillMaxWidth()
+                      .clip(DisplayCardShape)
+                      .background(palette.displayCard)
+                      .pointerInput(Unit) {
+                          detectHorizontalDragGestures(
+                              onDragStart = { dragAccumulated = 0f },
+                              onHorizontalDrag = { change, dragAmount ->
+                                  change.consume()
+                                  dragAccumulated += dragAmount
+                              },
+                              onDragEnd = {
+                                  if (dragAccumulated < -65f) {
+                                      FeedbackHelper.performFeedback(view, hapticsEnabled, soundEnabled)
+                                      onSwipeDelete()
+                                  }
+                              }
+                          )
+                      }
+                      .padding(horizontal = 24.dp, vertical = 20.dp)
+              ) {
+                  Column(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalAlignment = Alignment.End,
+                      verticalArrangement = Arrangement.SpaceBetween
+                  ) {
+                      Text(
+                          text = lastExpressionPeek.ifEmpty { " " },
+                          style = MaterialTheme.typography.titleMedium,
+                          color = palette.textSecondary.copy(alpha = 0.75f),
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis,
+                          textAlign = TextAlign.End,
+                          modifier = Modifier.fillMaxWidth().clickable(enabled = lastExpressionPeek.isNotEmpty()) { onHistoryPeekClick() }
+                      )
+
+                      AnimatedContent(
+                          targetState = primaryText to evaluationSparkleTrigger,
+                          transitionSpec = {
+                              val isEquals = targetState.second != initialState.second && !reduceMotion
+                              if (isEquals) {
+                                  (slideInVertically(tween(240)) { it / 2 } + fadeIn(tween(240)))
+                                      .togetherWith(slideOutVertically(tween(200)) { -it / 2 } + fadeOut(tween(180)))
+                              } else {
+                                  fadeIn(tween(0)).togetherWith(fadeOut(tween(0)))
+                              }.using(SizeTransform(clip = false))
+                          },
+                          label = "mainDisplayAnim"
+                      ) { (displayValue, _) ->
+                          Text(
+                              text = displayValue,
+                              style = MaterialTheme.typography.displayLarge.copy(fontSize = dynamicFontSize, lineHeight = dynamicFontSize * 1.15f),
+                              color = palette.textPrimary,
+                              textAlign = TextAlign.End,
+                              maxLines = 2,
+                              overflow = TextOverflow.Ellipsis,
+                              modifier = Modifier.fillMaxWidth().semantics {
+                                  liveRegion = LiveRegionMode.Polite
+                                  contentDescription = "$swipeDescription Current value: $displayValue"
+                              }
+                          )
+                      }
+
+                      val bottomText = errorMessage ?: livePreview.ifEmpty { " " }
+                      val isError = errorMessage != null
+                      Text(
+                          text = bottomText,
+                          style = MaterialTheme.typography.titleLarge,
+                          color = if (isError) palette.operatorKey else palette.textSecondary,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis,
+                          textAlign = TextAlign.End,
+                          modifier = Modifier.fillMaxWidth()
+                      )
+                  }
+                  SparkleOverlay(trigger = evaluationSparkleTrigger)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/components/CalculatorKeypad.kt
+          package com.calki.app.ui.components
+
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.Row
+          import androidx.compose.foundation.layout.fillMaxHeight
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import com.calki.app.domain.model.CalculatorKey
+
+          private val standardKeyRows = listOf(
+              listOf(CalculatorKey.CLEAR, CalculatorKey.BACKSPACE, CalculatorKey.PERCENT, CalculatorKey.DIVIDE),
+              listOf(CalculatorKey.SEVEN, CalculatorKey.EIGHT, CalculatorKey.NINE, CalculatorKey.MULTIPLY),
+              listOf(CalculatorKey.FOUR, CalculatorKey.FIVE, CalculatorKey.SIX, CalculatorKey.SUBTRACT),
+              listOf(CalculatorKey.ONE, CalculatorKey.TWO, CalculatorKey.THREE, CalculatorKey.ADD),
+              listOf(CalculatorKey.PLUS_MINUS, CalculatorKey.ZERO, CalculatorKey.DECIMAL, CalculatorKey.EQUALS)
+          )
+
+          private val scientificKeyRows = listOf(
+              listOf(CalculatorKey.SIN, CalculatorKey.COS, CalculatorKey.TAN),
+              listOf(CalculatorKey.LOG, CalculatorKey.LN, CalculatorKey.SQRT),
+              listOf(CalculatorKey.SQUARE, CalculatorKey.POWER, CalculatorKey.PI),
+              listOf(CalculatorKey.LEFT_PAREN, CalculatorKey.RIGHT_PAREN, CalculatorKey.E)
+          )
+
+          @Composable
+          fun CalculatorKeypad(
+              isLandscape: Boolean,
+              hapticsEnabled: Boolean,
+              soundEnabled: Boolean,
+              onKeyPress: (CalculatorKey) -> Unit,
+              onLongPressClear: () -> Unit,
+              modifier: Modifier = Modifier
+          ) {
+              if (isLandscape) {
+                  Row(modifier = modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                      Column(modifier = Modifier.weight(0.42f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          scientificKeyRows.forEach { row ->
+                              Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                  row.forEach { key ->
+                                      CalkiKeyButton(
+                                          key = key,
+                                          hapticsEnabled = hapticsEnabled,
+                                          soundEnabled = soundEnabled,
+                                          onClick = { onKeyPress(key) },
+                                          modifier = Modifier.weight(1f)
+                                      )
+                                  }
+                              }
+                          }
+                      }
+                      StandardKeyGrid(
+                          hapticsEnabled = hapticsEnabled,
+                          soundEnabled = soundEnabled,
+                          onKeyPress = onKeyPress,
+                          onLongPressClear = onLongPressClear,
+                          spacing = 10,
+                          modifier = Modifier.weight(0.58f).fillMaxHeight()
+                      )
+                  }
+              } else {
+                  StandardKeyGrid(
+                      hapticsEnabled = hapticsEnabled,
+                      soundEnabled = soundEnabled,
+                      onKeyPress = onKeyPress,
+                      onLongPressClear = onLongPressClear,
+                      spacing = 12,
+                      modifier = modifier.fillMaxSize()
+                  )
+              }
+          }
+
+          @Composable
+          private fun StandardKeyGrid(
+              hapticsEnabled: Boolean,
+              soundEnabled: Boolean,
+              onKeyPress: (CalculatorKey) -> Unit,
+              onLongPressClear: () -> Unit,
+              spacing: Int,
+              modifier: Modifier = Modifier
+          ) {
+              Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(spacing.dp)) {
+                  standardKeyRows.forEach { row ->
+                      Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing.dp)) {
+                          row.forEach { key ->
+                              CalkiKeyButton(
+                                  key = key,
+                                  hapticsEnabled = hapticsEnabled,
+                                  soundEnabled = soundEnabled,
+                                  onClick = { onKeyPress(key) },
+                                  onLongClick = if (key == CalculatorKey.CLEAR) onLongPressClear else null,
+                                  modifier = Modifier.weight(1f)
+                              )
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/screens/HistoryBottomSheet.kt
+          package com.calki.app.ui.screens
+
+          import androidx.compose.animation.animateColorAsState
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.Row
+          import androidx.compose.foundation.layout.Spacer
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.foundation.layout.height
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.outlined.DeleteOutline
+          import androidx.compose.material3.ExperimentalMaterial3Api
+          import androidx.compose.material3.Icon
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.ModalBottomSheet
+          import androidx.compose.material3.SwipeToDismissBox
+          import androidx.compose.material3.SwipeToDismissBoxValue
+          import androidx.compose.material3.Text
+          import androidx.compose.material3.TextButton
+          import androidx.compose.material3.rememberModalBottomSheetState
+          import androidx.compose.material3.rememberSwipeToDismissBoxState
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.LaunchedEffect
+          import androidx.compose.runtime.getValue
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.text.style.TextAlign
+          import androidx.compose.ui.unit.dp
+          import com.calki.app.data.local.CalculationEntity
+          import com.calki.app.ui.theme.LocalCalkiPalette
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun HistoryBottomSheet(
+              history: List<CalculationEntity>,
+              onSelectItem: (CalculationEntity) -> Unit,
+              onDeleteItem: (CalculationEntity) -> Unit,
+              onClearAll: () -> Unit,
+              onDismiss: () -> Unit
+          ) {
+              val palette = LocalCalkiPalette.current
+              val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+
+              ModalBottomSheet(
+                  onDismissRequest = onDismiss,
+                  sheetState = sheetState,
+                  containerColor = palette.background,
+                  shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+              ) {
+                  Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          Text("History", style = MaterialTheme.typography.titleLarge, color = palette.textPrimary)
+                          if (history.isNotEmpty()) {
+                              TextButton(onClick = onClearAll) {
+                                  Text("Clear all", style = MaterialTheme.typography.labelLarge, color = palette.operatorKey)
+                              }
+                          }
+                      }
+                      Spacer(modifier = Modifier.height(12.dp))
+                      if (history.isEmpty()) {
+                          Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                              Text("No calculations yet ✨", style = MaterialTheme.typography.bodyLarge, color = palette.textSecondary)
+                          }
+                      } else {
+                          LazyColumn(
+                              verticalArrangement = Arrangement.spacedBy(12.dp),
+                              modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)
+                          ) {
+                              items(items = history, key = { it.id }) { item ->
+                                  val dismissState = rememberSwipeToDismissBoxState()
+                                  LaunchedEffect(dismissState.currentValue) {
+                                      if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) onDeleteItem(item)
+                                  }
+                                  SwipeToDismissBox(
+                                      state = dismissState,
+                                      backgroundContent = {
+                                          val bg by animateColorAsState(
+                                              if (dismissState.targetValue == SwipeToDismissBoxValue.Settled) Color.Transparent else palette.operatorKey.copy(alpha = 0.25f),
+                                              label = "swipeBg"
+                                          )
+                                          Box(
+                                              modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)).background(bg).padding(horizontal = 20.dp),
+                                              contentAlignment = Alignment.CenterEnd
+                                          ) {
+                                              Icon(Icons.Outlined.DeleteOutline, contentDescription = "Delete", tint = palette.operatorKey)
+                                          }
+                                      }
+                                  ) {
+                                      Column(
+                                          horizontalAlignment = Alignment.End,
+                                          modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(palette.displayCard)
+                                              .clickable { onSelectItem(item) }.padding(horizontal = 20.dp, vertical = 16.dp)
+                                      ) {
+                                          Text(item.expression, style = MaterialTheme.typography.bodyLarge, color = palette.textSecondary, textAlign = TextAlign.End)
+                                          Spacer(modifier = Modifier.height(4.dp))
+                                          Text("= ${item.result}", style = MaterialTheme.typography.headlineMedium, color = palette.textPrimary, textAlign = TextAlign.End)
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/screens/SettingsBottomSheet.kt
+          package com.calki.app.ui.screens
+
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.border
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.Row
+          import androidx.compose.foundation.layout.Spacer
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.foundation.layout.height
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.layout.size
+          import androidx.compose.foundation.shape.CircleShape
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.ExperimentalMaterial3Api
+          import androidx.compose.material3.FilterChip
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.ModalBottomSheet
+          import androidx.compose.material3.Slider
+          import androidx.compose.material3.Switch
+          import androidx.compose.material3.Text
+          import androidx.compose.material3.rememberModalBottomSheetState
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.unit.dp
+          import com.calki.app.domain.model.AccentPreset
+          import com.calki.app.domain.model.AppThemeMode
+          import com.calki.app.domain.model.UserSettings
+          import com.calki.app.ui.theme.LocalCalkiPalette
+          import kotlin.math.roundToInt
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun SettingsBottomSheet(
+              settings: UserSettings,
+              onThemeChange: (AppThemeMode) -> Unit,
+              onHapticsChange: (Boolean) -> Unit,
+              onSoundChange: (Boolean) -> Unit,
+              onDecimalPlacesChange: (Int) -> Unit,
+              onAccentPresetChange: (AccentPreset) -> Unit,
+              onDismiss: () -> Unit
+          ) {
+              val palette = LocalCalkiPalette.current
+              val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+              ModalBottomSheet(
+                  onDismissRequest = onDismiss,
+                  sheetState = sheetState,
+                  containerColor = palette.background,
+                  shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+              ) {
+                  Column(
+                      modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp).padding(bottom = 28.dp),
+                      verticalArrangement = Arrangement.spacedBy(20.dp)
+                  ) {
+                      Text("Calki Settings", style = MaterialTheme.typography.titleLarge, color = palette.textPrimary)
+
+                      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                          Text("Theme", style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                          Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                              AppThemeMode.entries.forEach { mode ->
+                                  FilterChip(
+                                      selected = settings.themeMode == mode,
+                                      onClick = { onThemeChange(mode) },
+                                      label = { Text(mode.label) },
+                                      shape = RoundedCornerShape(50)
+                                  )
+                              }
+                          }
+                      }
+
+                      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("Funky Accent Palette", style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                              AccentPreset.entries.forEach { preset ->
+                                  val isSelected = settings.accentPreset == preset
+                                  Column(
+                                      horizontalAlignment = Alignment.CenterHorizontally,
+                                      modifier = Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(palette.displayCard)
+                                          .border(if (isSelected) 2.5.dp else 0.dp, if (isSelected) palette.equalsKey else palette.displayCard, RoundedCornerShape(20.dp))
+                                          .clickable { onAccentPresetChange(preset) }.padding(vertical = 12.dp, horizontal = 6.dp)
+                                  ) {
+                                      Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+                                          Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(preset.operatorLight))
+                                          Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(preset.equalsLight))
+                                      }
+                                      Spacer(modifier = Modifier.height(6.dp))
+                                      Text(preset.title, style = MaterialTheme.typography.labelLarge, color = palette.textPrimary, maxLines = 1)
+                                  }
+                              }
+                          }
+                      }
+
+                      Column {
+                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                              Text("Max Decimal Places", style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                              Text(settings.decimalPlaces.toString(), style = MaterialTheme.typography.titleMedium, color = palette.equalsKey)
+                          }
+                          Slider(
+                              value = settings.decimalPlaces.toFloat(),
+                              onValueChange = { onDecimalPlacesChange(it.roundToInt()) },
+                              valueRange = 0f..10f,
+                              steps = 9
+                          )
+                      }
+
+                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                          Text("Haptic Feedback", style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                          Switch(checked = settings.hapticsEnabled, onCheckedChange = onHapticsChange)
+                      }
+
+                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                          Text("Key Click Sounds", style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                          Switch(checked = settings.soundEnabled, onCheckedChange = onSoundChange)
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/ui/screens/CalculatorScreen.kt
+          package com.calki.app.ui.screens
+
+          import android.content.res.Configuration
+          import android.widget.Toast
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.Row
+          import androidx.compose.foundation.layout.Spacer
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.layout.safeDrawingPadding
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.outlined.History
+          import androidx.compose.material.icons.outlined.Tune
+          import androidx.compose.material3.Icon
+          import androidx.compose.material3.IconButton
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.getValue
+          import androidx.compose.runtime.mutableStateOf
+          import androidx.compose.runtime.saveable.rememberSaveable
+          import androidx.compose.runtime.setValue
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.platform.LocalConfiguration
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.res.stringResource
+          import androidx.compose.ui.unit.dp
+          import com.calki.app.R
+          import com.calki.app.data.local.CalculationEntity
+          import com.calki.app.domain.model.AccentPreset
+          import com.calki.app.domain.model.AppThemeMode
+          import com.calki.app.domain.model.CalculatorKey
+          import com.calki.app.ui.CalculatorState
+          import com.calki.app.ui.components.CalculatorDisplay
+          import com.calki.app.ui.components.CalculatorKeypad
+          import com.calki.app.ui.theme.LocalCalkiPalette
+
+          @Composable
+          fun CalculatorScreen(
+              state: CalculatorState,
+              onKeyPress: (CalculatorKey) -> Unit,
+              onSwipeDelete: () -> Unit,
+              onLongPressClearAll: () -> Unit,
+              onReuseHistory: (CalculationEntity) -> Unit,
+              onDeleteHistoryItem: (CalculationEntity) -> Unit,
+              onClearHistory: () -> Unit,
+              onThemeChange: (AppThemeMode) -> Unit,
+              onHapticsChange: (Boolean) -> Unit,
+              onSoundChange: (Boolean) -> Unit,
+              onDecimalPlacesChange: (Int) -> Unit,
+              onAccentPresetChange: (AccentPreset) -> Unit,
+              modifier: Modifier = Modifier
+          ) {
+              val palette = LocalCalkiPalette.current
+              val context = LocalContext.current
+              val configuration = LocalConfiguration.current
+              val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+              var showHistorySheet by rememberSaveable { mutableStateOf(false) }
+              var showSettingsSheet by rememberSaveable { mutableStateOf(false) }
+              val historyClearedText = stringResource(R.string.history_cleared_toast)
+
+              Column(
+                  modifier = modifier
+                      .fillMaxSize()
+                      .background(palette.background)
+                      .safeDrawingPadding()
+                      .padding(horizontal = 18.dp, vertical = if (isLandscape) 8.dp else 14.dp),
+                  verticalArrangement = Arrangement.spacedBy(if (isLandscape) 10.dp else 16.dp)
+              ) {
+                  Row(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalArrangement = Arrangement.SpaceBetween,
+                      verticalAlignment = Alignment.CenterVertically
+                  ) {
+                      Text("calki", style = MaterialTheme.typography.titleLarge, color = palette.textPrimary, modifier = Modifier.padding(start = 8.dp))
+                      Spacer(modifier = Modifier.weight(1f))
+                      IconButton(onClick = { showHistorySheet = true }) {
+                          Icon(Icons.Outlined.History, contentDescription = stringResource(R.string.cd_history_button), tint = palette.textPrimary)
+                      }
+                      IconButton(onClick = { showSettingsSheet = true }) {
+                          Icon(Icons.Outlined.Tune, contentDescription = stringResource(R.string.cd_settings_button), tint = palette.textPrimary)
+                      }
+                  }
+
+                  CalculatorDisplay(
+                      formattedExpression = state.formattedExpression,
+                      livePreview = state.livePreview,
+                      lastExpressionPeek = state.lastExpressionPeek,
+                      errorMessage = state.errorMessage,
+                      evaluationSparkleTrigger = state.evaluationSparkleTrigger,
+                      hapticsEnabled = state.settings.hapticsEnabled,
+                      soundEnabled = state.settings.soundEnabled,
+                      onSwipeDelete = onSwipeDelete,
+                      onHistoryPeekClick = { showHistorySheet = true },
+                      modifier = Modifier.weight(if (isLandscape) 0.34f else 0.32f)
+                  )
+
+                  CalculatorKeypad(
+                      isLandscape = isLandscape,
+                      hapticsEnabled = state.settings.hapticsEnabled,
+                      soundEnabled = state.settings.soundEnabled,
+                      onKeyPress = onKeyPress,
+                      onLongPressClear = {
+                          onLongPressClearAll()
+                          Toast.makeText(context, historyClearedText, Toast.LENGTH_SHORT).show()
+                      },
+                      modifier = Modifier.weight(if (isLandscape) 0.66f else 0.68f)
+                  )
+              }
+
+              if (showHistorySheet) {
+                  HistoryBottomSheet(
+                      history = state.history,
+                      onSelectItem = { onReuseHistory(it); showHistorySheet = false },
+                      onDeleteItem = onDeleteHistoryItem,
+                      onClearAll = onClearHistory,
+                      onDismiss = { showHistorySheet = false }
+                  )
+              }
+
+              if (showSettingsSheet) {
+                  SettingsBottomSheet(
+                      settings = state.settings,
+                      onThemeChange = onThemeChange,
+                      onHapticsChange = onHapticsChange,
+                      onSoundChange = onSoundChange,
+                      onDecimalPlacesChange = onDecimalPlacesChange,
+                      onAccentPresetChange = onAccentPresetChange,
+                      onDismiss = { showSettingsSheet = false }
+                  )
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/CalkiApp.kt
+          package com.calki.app
+
+          import android.app.Application
+          import dagger.hilt.android.HiltAndroidApp
+
+          @HiltAndroidApp
+          class CalkiApp : Application()
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/calki/app/MainActivity.kt
+          package com.calki.app
+
+          import android.animation.ObjectAnimator
+          import android.os.Bundle
+          import android.view.View
+          import android.view.animation.OvershootInterpolator
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.activity.enableEdgeToEdge
+          import androidx.activity.viewModels
+          import androidx.compose.runtime.getValue
+          import androidx.core.animation.doOnEnd
+          import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+          import androidx.lifecycle.compose.collectAsStateWithLifecycle
+          import com.calki.app.ui.CalculatorViewModel
+          import com.calki.app.ui.screens.CalculatorScreen
+          import com.calki.app.ui.theme.CalkiTheme
+          import dagger.hilt.android.AndroidEntryPoint
+
+          @AndroidEntryPoint
+          class MainActivity : ComponentActivity() {
+              private val viewModel: CalculatorViewModel by viewModels()
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  val splashScreen = installSplashScreen()
+                  super.onCreate(savedInstanceState)
+
+                  splashScreen.setOnExitAnimationListener { splashScreenView ->
+                      val iconView = splashScreenView.iconView
+                      val scaleX = ObjectAnimator.ofFloat(iconView, View.SCALE_X, 1f, 1.14f, 0f)
+                      val scaleY = ObjectAnimator.ofFloat(iconView, View.SCALE_Y, 1f, 1.14f, 0f)
+                      val fade = ObjectAnimator.ofFloat(splashScreenView.view, View.ALPHA, 1f, 0f)
+                      scaleX.interpolator = OvershootInterpolator(1.5f)
+                      scaleY.interpolator = OvershootInterpolator(1.5f)
+                      scaleX.duration = 260L
+                      scaleY.duration = 260L
+                      fade.duration = 260L
+                      scaleX.start()
+                      scaleY.start()
+                      fade.doOnEnd { splashScreenView.remove() }
+                      fade.start()
+                  }
+
+                  enableEdgeToEdge()
+                  setContent {
+                      val state by viewModel.uiState.collectAsStateWithLifecycle()
+                      CalkiTheme(themeMode = state.settings.themeMode, accentPreset = state.settings.accentPreset) {
+                          CalculatorScreen(
+                              state = state,
+                              onKeyPress = viewModel::onKeyPress,
+                              onSwipeDelete = viewModel::deleteLastChar,
+                              onLongPressClearAll = viewModel::onLongPressClearAllHistory,
+                              onReuseHistory = viewModel::reuseHistoryItem,
+                              onDeleteHistoryItem = viewModel::deleteHistoryItem,
+                              onClearHistory = viewModel::clearAllHistory,
+                              onThemeChange = viewModel::updateTheme,
+                              onHapticsChange = viewModel::updateHaptics,
+                              onSoundChange = viewModel::updateSound,
+                              onDecimalPlacesChange = viewModel::updateDecimalPlaces,
+                              onAccentPresetChange = viewModel::updateAccentPreset
+                          )
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/test/java/com/calki/app/domain/evaluator/ExpressionEvaluatorTest.kt
+          package com.calki.app.domain.evaluator
+
+          import org.junit.Assert.assertEquals
+          import org.junit.Assert.assertTrue
+          import org.junit.Before
+          import org.junit.Test
+
+          class ExpressionEvaluatorTest {
+              private lateinit var evaluator: ExpressionEvaluator
+
+              @Before
+              fun setUp() { evaluator = ExpressionEvaluator() }
+
+              @Test
+              fun `exact BigDecimal addition 0_1 plus 0_2 equals 0_3`() {
+                  val result = evaluator.evaluate("0.1+0.2")
+                  assertTrue(result is EvalResult.Success)
+                  assertEquals("0.3", (result as EvalResult.Success).formattedValue)
+              }
+
+              @Test
+              fun `operator precedence multiplication before addition`() {
+                  val result = evaluator.evaluate("2+3×4")
+                  assertEquals("14", (result as EvalResult.Success).formattedValue)
+              }
+
+              @Test
+              fun `divide by zero returns DivideByZero result`() {
+                  assertTrue(evaluator.evaluate("42÷0") is EvalResult.DivideByZero)
+              }
+          }
+          EOF
+
+      - name: Commit Generated Project Files to Repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --staged --quiet || git commit -m "Generate complete Calki Android project"
+          git push
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Run Unit Tests & Build Debug APK
+        run: gradle testDebugUnitTest assembleDebug
+
+      - name: Upload Ready-to-Install Calki APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calki-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
