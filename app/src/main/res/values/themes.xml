@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Calki.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFF8F0</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimationDuration">280</item>
+        <item name="postSplashScreenTheme">@style/Theme.Calki</item>
+    </style>
+    <style name="Theme.Calki" parent="android:Theme.Material.NoActionBar" />
+</resources>

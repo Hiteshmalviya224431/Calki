@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Calki</string>
+    <string name="divide_by_zero_message">Oops, can\'t divide by 0 🙈</string>
+    <string name="format_error_message">Hmm, check that expression ✨</string>
+    <string name="history_cleared_toast">All history cleared ✨</string>
+    <string name="cd_history_button">Open calculation history</string>
+    <string name="cd_settings_button">Open calculator settings</string>
+    <string name="cd_display_swipe">Calculation display. Swipe left to delete last digit.</string>
+</resources>
